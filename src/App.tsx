@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
+  Star,
+  GripVertical,
   Calendar as CalendarIcon
 } from 'lucide-react';
 
@@ -40,6 +42,7 @@ interface Student {
   id: number;
   name: string;
   authCode: string;
+  priority: number;
 }
 
 interface Job {
@@ -52,6 +55,7 @@ interface Job {
 }
 
 export default function App() {
+  const priorityZonesRef = useRef<(HTMLDivElement | null)[]>([]);
   const [activeTab, setActiveTab] = useState<'apply' | 'salary' | 'jobs' | 'admin'>('apply');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [adminPassword, setAdminPassword] = useState('1234');
@@ -59,7 +63,6 @@ export default function App() {
   const [intendedTab, setIntendedTab] = useState<'jobs' | 'admin' | null>(null);
 
   const [studentsData, setStudentsData] = useState<Student[]>([]);
-  const [priorityOrder, setPriorityOrder] = useState<number[]>([]);
   const [currentJobs, setCurrentJobs] = useState<Job[]>([]);
   const [applications, setApplications] = useState<Record<string, string[]>>({});
   
@@ -91,31 +94,22 @@ export default function App() {
       } else {
         // Default students if none exist
         const defaultStudents = [
-          { id: 1, name: "강서진", authCode: "1234" }, { id: 2, name: "강준서", authCode: "1234" },
-          { id: 3, name: "공유진", authCode: "1234" }, { id: 4, name: "김려완", authCode: "1234" },
-          { id: 5, name: "김민결", authCode: "1234" }, { id: 6, name: "김민서", authCode: "1234" },
-          { id: 7, name: "김상원", authCode: "1234" }, { id: 8, name: "김승호", authCode: "1234" },
-          { id: 9, name: "김시현", authCode: "1234" }, { id: 10, name: "김채민", authCode: "1234" },
-          { id: 11, name: "노슬우", authCode: "1234" }, { id: 12, name: "박나율", authCode: "1234" },
-          { id: 13, name: "박라희", authCode: "1234" }, { id: 14, name: "박예은", authCode: "1234" },
-          { id: 15, name: "신시은", authCode: "1234" }, { id: 16, name: "신예은", authCode: "1234" },
-          { id: 17, name: "신하주", authCode: "1234" }, { id: 18, name: "염세현", authCode: "1234" },
-          { id: 19, name: "우아영", authCode: "1234" }, { id: 20, name: "이다은", authCode: "1234" },
-          { id: 21, name: "이서준", authCode: "1234" }, { id: 22, name: "이승열", authCode: "1234" },
-          { id: 23, name: "이하늘", authCode: "1234" }, { id: 24, name: "임경한", authCode: "1234" },
-          { id: 25, name: "정예설", authCode: "1234" }, { id: 26, name: "최세현", authCode: "1234" },
-          { id: 27, name: "함지원", authCode: "1234" }
+          { id: 1, name: "강서진", authCode: "1234", priority: 3 }, { id: 2, name: "강준서", authCode: "1234", priority: 3 },
+          { id: 3, name: "공유진", authCode: "1234", priority: 3 }, { id: 4, name: "김려완", authCode: "1234", priority: 3 },
+          { id: 5, name: "김민결", authCode: "1234", priority: 3 }, { id: 6, name: "김민서", authCode: "1234", priority: 3 },
+          { id: 7, name: "김상원", authCode: "1234", priority: 3 }, { id: 8, name: "김승호", authCode: "1234", priority: 3 },
+          { id: 9, name: "김시현", authCode: "1234", priority: 3 }, { id: 10, name: "김채민", authCode: "1234", priority: 3 },
+          { id: 11, name: "노슬우", authCode: "1234", priority: 3 }, { id: 12, name: "박나율", authCode: "1234", priority: 3 },
+          { id: 13, name: "박라희", authCode: "1234", priority: 3 }, { id: 14, name: "박예은", authCode: "1234", priority: 3 },
+          { id: 15, name: "신시은", authCode: "1234", priority: 3 }, { id: 16, name: "신예은", authCode: "1234", priority: 3 },
+          { id: 17, name: "신하주", authCode: "1234", priority: 3 }, { id: 18, name: "염세현", authCode: "1234", priority: 3 },
+          { id: 19, name: "우아영", authCode: "1234", priority: 3 }, { id: 20, name: "이다은", authCode: "1234", priority: 3 },
+          { id: 21, name: "이서준", authCode: "1234", priority: 3 }, { id: 22, name: "이승열", authCode: "1234", priority: 3 },
+          { id: 23, name: "이하늘", authCode: "1234", priority: 3 }, { id: 24, name: "임경한", authCode: "1234", priority: 3 },
+          { id: 25, name: "정예설", authCode: "1234", priority: 3 }, { id: 26, name: "최세현", authCode: "1234", priority: 3 },
+          { id: 27, name: "함지원", authCode: "1234", priority: 3 }
         ];
         setStudentsData(defaultStudents);
-      }
-    });
-
-    const priorityRef = ref(db, 'class_job_data/priority');
-    onValue(priorityRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setPriorityOrder(snapshot.val());
-      } else {
-        setPriorityOrder(Array.from({ length: 27 }, (_, i) => i + 1));
       }
     });
 
@@ -144,6 +138,70 @@ export default function App() {
     });
   }, [selectedYear, selectedMonth]);
 
+  // Priority Drag & Drop Initialization
+  useEffect(() => {
+    if (activeTab === 'admin' && isAuthorized) {
+      const sortables: Sortable[] = [];
+      
+      // Initialize 5 priority zones
+      for (let i = 1; i <= 5; i++) {
+        const el = priorityZonesRef.current[i];
+        if (el) {
+          const s = new Sortable(el, {
+            group: 'priority-students',
+            animation: 150,
+            ghostClass: 'bg-blue-50',
+            onEnd: (evt) => {
+              // 1. Read the new state from DOM before undoing
+              const newState: {id: number, priority: number}[] = [];
+              for (let p = 1; p <= 5; p++) {
+                const zone = priorityZonesRef.current[p];
+                if (zone) {
+                  Array.from(zone.children).forEach(child => {
+                    const htmlChild = child as HTMLElement;
+                    const id = Number(htmlChild.getAttribute('data-id'));
+                    if (id) newState.push({ id, priority: p });
+                  });
+                }
+              }
+
+              // 2. Undo the DOM change immediately to prevent React from crashing
+              if (evt.from !== evt.to) {
+                evt.from.appendChild(evt.item);
+              } else if (evt.newIndex !== undefined && evt.oldIndex !== undefined) {
+                const children = Array.from(evt.from.children);
+                if (evt.oldIndex < children.length) {
+                  evt.from.insertBefore(evt.item, children[evt.oldIndex]);
+                } else {
+                  evt.from.appendChild(evt.item);
+                }
+              }
+
+              // 3. Update state in a timeout to be safe
+              setTimeout(() => {
+                setStudentsData(prev => {
+                  let changed = false;
+                  const next = prev.map(s => {
+                    const update = newState.find(item => item.id === s.id);
+                    if (update && (s.priority || 3) !== update.priority) {
+                      changed = true;
+                      return { ...s, priority: update.priority };
+                    }
+                    return s;
+                  });
+                  return changed ? next : prev;
+                });
+              }, 0);
+            }
+          });
+          sortables.push(s);
+        }
+      }
+
+      return () => sortables.forEach(s => s.destroy());
+    }
+  }, [activeTab, isAuthorized]);
+
   // Handle SortableJS initialization for Jobs
   useEffect(() => {
     if (activeTab === 'jobs' && isAuthorized) {
@@ -155,22 +213,40 @@ export default function App() {
         group: 'shared',
         animation: 150,
         ghostClass: 'sortable-ghost',
-        onEnd: () => {
-          // Sync state with DOM
-          setCurrentJobs(prevJobs => {
-            const updatedJobs = JSON.parse(JSON.stringify(prevJobs));
-            dropZonesRef.current.forEach((dz, idx) => {
-              if (dz && updatedJobs[idx]) {
-                updatedJobs[idx].students = Array.from(dz.children).map(child => {
-                  const htmlChild = child as HTMLElement;
-                  const num = htmlChild.querySelector('.tag-num')?.textContent;
-                  const name = htmlChild.querySelector('.tag-name')?.textContent;
-                  return `${num} ${name}`;
-                });
-              }
+        onEnd: (evt) => {
+          // 1. Read new state from DOM
+          const newJobStudents: string[][] = dropZonesRef.current.map(dz => {
+            if (!dz) return [];
+            return Array.from(dz.children).map(child => {
+              const htmlChild = child as HTMLElement;
+              const num = htmlChild.querySelector('.tag-num')?.textContent;
+              const name = htmlChild.querySelector('.tag-name')?.textContent;
+              return `${num} ${name}`;
             });
-            return updatedJobs;
           });
+
+          // 2. Undo DOM change
+          if (evt.from !== evt.to) {
+            evt.from.appendChild(evt.item);
+          } else if (evt.newIndex !== undefined && evt.oldIndex !== undefined) {
+            const children = Array.from(evt.from.children);
+            if (evt.oldIndex < children.length) {
+              evt.from.insertBefore(evt.item, children[evt.oldIndex]);
+            } else {
+              evt.from.appendChild(evt.item);
+            }
+          }
+
+          // 3. Update state
+          setTimeout(() => {
+            setCurrentJobs(prevJobs => {
+              const next = prevJobs.map((job, idx) => ({
+                ...job,
+                students: newJobStudents[idx] || []
+              }));
+              return next;
+            });
+          }, 0);
         }
       };
 
@@ -188,24 +264,6 @@ export default function App() {
       sortableInstances.current = [];
     };
   }, [activeTab, isAuthorized, currentJobs.length]);
-
-  // Handle SortableJS for Priority List
-  useEffect(() => {
-    if (activeTab === 'admin' && isAuthorized && priorityListRef.current) {
-      const sortable = new Sortable(priorityListRef.current, {
-        animation: 150,
-        onEnd: () => {
-          if (priorityListRef.current) {
-            const newOrder = Array.from(priorityListRef.current.children).map(child => 
-              Number((child as HTMLElement).dataset.id)
-            );
-            setPriorityOrder(newOrder);
-          }
-        }
-      });
-      return () => sortable.destroy();
-    }
-  }, [activeTab, isAuthorized, priorityOrder.length]);
 
   const showMsg = (text: string, color = "#00c853") => {
     setStatusMsg({ text, color });
@@ -261,20 +319,16 @@ export default function App() {
     setConfirmModal({
       show: true,
       title: "배정 시작",
-      msg: "자동 배정할까요? (기존 배정 내역은 초기화됩니다.)",
+      msg: "자동 배정할까요? 우선순위가 같을 경우 무작위로 배정됩니다.",
       onConfirm: () => {
         let tempJobs = JSON.parse(JSON.stringify(currentJobs));
         tempJobs.forEach((j: any) => j.students = []);
         
-        // Process all students based on priority order
-        const studentsToAssign = [...studentsData].sort((a, b) => {
-          const indexA = priorityOrder.indexOf(a.id);
-          const indexB = priorityOrder.indexOf(b.id);
-          if (indexA === -1 && indexB === -1) return a.id - b.id;
-          if (indexA === -1) return 1;
-          if (indexB === -1) return -1;
-          return indexA - indexB;
-        });
+        // Shuffle students first to handle equal priorities randomly
+        const shuffledStudents = [...studentsData].sort(() => Math.random() - 0.5);
+        
+        // Sort by priority level (1: Highest, 5: Lowest)
+        const studentsToAssign = shuffledStudents.sort((a, b) => (a.priority || 3) - (b.priority || 3));
         
         studentsToAssign.forEach(s => {
           const nameTag = `${s.id} ${s.name}`;
@@ -295,7 +349,9 @@ export default function App() {
           if (!assigned) {
             let available = tempJobs.filter((j: any) => (j.students || []).length < j.limit);
             if (available.length > 0) {
-              // Pick the job with the most remaining spots to balance better
+              // Shuffle available jobs to randomize when capacities are equal
+              available.sort(() => Math.random() - 0.5);
+              // Pick the job with the most remaining spots
               available.sort((a: any, b: any) => (b.limit - b.students.length) - (a.limit - a.students.length));
               available[0].students.push(nameTag);
               assigned = true;
@@ -305,7 +361,7 @@ export default function App() {
         
         setCurrentJobs(tempJobs);
         setConfirmModal(null);
-        showMsg("배정 완료!");
+        showMsg("무작위 자동 배정 완료!");
       }
     });
   };
@@ -872,6 +928,53 @@ export default function App() {
               </div>
             </div>
 
+            {/* Priority Group Management */}
+            <div className="rounded-2xl border border-slate-100 p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-500 shadow-sm">
+                    <Star size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">배정 우선순위 관리 (드래그)</h3>
+                    <p className="text-[11px] text-slate-400">학생을 드래그하여 1~5순위 그룹에 배치하세요. (1순위가 가장 높음)</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                {[1, 2, 3, 4, 5].map(p => (
+                  <div key={p} className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/30 p-3">
+                    <div className="mb-3 flex items-center justify-between px-1">
+                      <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{p}순위</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-400 shadow-sm">
+                        {studentsData.filter(s => (s.priority || 3) === p).length}명
+                      </span>
+                    </div>
+                    <div 
+                      ref={el => priorityZonesRef.current[p] = el}
+                      data-priority={p}
+                      className="flex min-h-[120px] flex-col gap-2 rounded-xl p-1 transition-colors"
+                    >
+                      {studentsData
+                        .filter(s => (s.priority || 3) === p)
+                        .map(s => (
+                          <div 
+                            key={s.id} 
+                            data-id={s.id}
+                            className="flex cursor-grab items-center justify-between rounded-lg border border-white bg-white p-2 shadow-sm hover:border-blue-200 hover:shadow active:cursor-grabbing transition-all"
+                          >
+                            <span className="text-[11px] font-bold text-slate-700">{s.id}. {s.name}</span>
+                            <GripVertical size={12} className="text-slate-300" />
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Student List Management */}
             <div className="rounded-2xl border border-slate-100 p-6">
               <div className="mb-6 flex items-center justify-between">
@@ -888,7 +991,7 @@ export default function App() {
                   <button 
                     onClick={() => {
                       const nextId = studentsData.length > 0 ? Math.max(...studentsData.map(s => s.id)) + 1 : 1;
-                      setStudentsData([...studentsData, { id: nextId, name: '새 학생', authCode: '1234' }]);
+                      setStudentsData([...studentsData, { id: nextId, name: '새 학생', authCode: '1234', priority: 3 }]);
                     }}
                     className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-black transition-all"
                   >
@@ -934,59 +1037,21 @@ export default function App() {
                         setStudentsData(updated);
                       }}
                     />
-                    <div className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter mb-1">Passcode</div>
-                    <input 
-                      className="w-full text-xs text-slate-400 outline-none bg-slate-50 rounded px-1 py-0.5"
-                      value={s.authCode}
-                      onChange={(e) => {
-                        const updated = studentsData.map(st => st.id === s.id ? { ...st, authCode: e.target.value } : st);
-                        setStudentsData(updated);
-                      }}
-                    />
+                    <div className="flex items-center justify-between gap-1 mb-2">
+                      <div className="flex-1">
+                        <div className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter mb-1">Passcode</div>
+                        <input 
+                          className="w-full text-xs text-slate-400 outline-none bg-slate-50 rounded px-1 py-0.5"
+                          value={s.authCode}
+                          onChange={(e) => {
+                            const updated = studentsData.map(st => st.id === s.id ? { ...st, authCode: e.target.value } : st);
+                            setStudentsData(updated);
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Priority Sorting */}
-            <div className="rounded-2xl border border-slate-100 p-6">
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-500 shadow-sm">
-                    <RotateCcw size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800">배정 우선순위 설정</h3>
-                    <p className="text-[11px] text-slate-400">드래그하여 자동 배정 시의 학생 우선순위를 결정합니다.</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => {
-                    set(ref(db, 'class_job_data/priority'), priorityOrder).then(() => showMsg("순위 저장 완료"));
-                  }}
-                  className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-black shadow-md transition-all"
-                >
-                  <Save size={14} /> 순위 저장
-                </button>
-              </div>
-              <div 
-                ref={priorityListRef}
-                className="flex flex-wrap gap-3 rounded-2xl bg-slate-50 p-6 border border-slate-100"
-              >
-                {priorityOrder.map((id, i) => {
-                  const s = studentsData.find(st => st.id === id);
-                  if (!s) return null;
-                  return (
-                    <div 
-                      key={id} 
-                      data-id={id}
-                      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm cursor-grab hover:border-blue-400 hover:shadow-md transition-all active:cursor-grabbing"
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-500">{i + 1}</span>
-                      <span className="text-xs font-bold text-slate-700">{s.name}</span>
-                    </div>
-                  );
-                })}
               </div>
             </div>
 
