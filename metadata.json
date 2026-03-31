@@ -1,0 +1,5 @@
+{
+  "name": "Remix: 학급 직업 관리 시스템",
+  "description": "학생들의 학급 직업 지원 및 자동 배정, 월급 관리 시스템",
+  "requestFramePermissions": []
+}
