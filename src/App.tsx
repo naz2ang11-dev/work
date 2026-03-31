@@ -940,6 +940,14 @@ export default function App() {
                     <p className="text-[11px] text-slate-400">학생을 드래그하여 1~5순위 그룹에 배치하세요. (1순위가 가장 높음)</p>
                   </div>
                 </div>
+                <button 
+                  onClick={() => {
+                    set(ref(db, 'class_job_data/students'), studentsData).then(() => showMsg("우선순위 저장 완료"));
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#007bff] px-4 py-2 text-xs font-bold text-white hover:bg-[#0069d9] shadow-md transition-all"
+                >
+                  <Save size={14} /> 우선순위 저장
+                </button>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
