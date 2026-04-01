@@ -4,6 +4,8 @@ import { getDatabase, ref, onValue, set, get } from 'firebase/database';
 import Sortable from 'sortablejs';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 import { 
   Users, 
   Briefcase, 
@@ -388,31 +390,75 @@ export default function App() {
   };
 
   const printJobResults = () => {
-    const doc = new jsPDF();
-    
-    // Add font support for Korean if needed (using default for now)
-    doc.setFontSize(20);
-    doc.text(`${selectedYear} Year ${selectedMonth} Month Class Job Assignment Results`, 105, 15, { align: 'center' });
-    
-    const tableData = currentJobs.map(job => [
-      job.name,
-      job.desc,
-      job.limit.toString(),
-      job.students.join(', '),
-      job.salary.toString(),
-      job.condition || ''
-    ]);
+    const element = document.createElement('div');
+    element.style.padding = '40px';
+    element.style.width = '750px';
+    element.style.backgroundColor = 'white';
+    element.style.color = '#333';
+    element.style.fontFamily = "'Malgun Gothic', 'Dotum', 'Apple SD Gothic Neo', sans-serif";
 
-    (doc as any).autoTable({
-      startY: 25,
-      head: [['Job', 'Description', 'Limit', 'Students', 'Salary', 'Condition']],
-      body: tableData,
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [0, 123, 255] }
+    const title = `${selectedYear}년 ${selectedMonth}월 학급 직업 배정 결과`;
+    
+    let tableHtml = `
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="font-size: 28px; margin: 0; color: #1a237e; border-bottom: 2px solid #007bff; display: inline-block; padding-bottom: 10px;">${title}</h1>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1;">
+        <thead>
+          <tr style="background-color: #f8fafc; border-bottom: 2px solid #007bff;">
+            <th style="border: 1px solid #cbd5e1; padding: 12px 8px; text-align: center; font-size: 14px; width: 15%;">직업</th>
+            <th style="border: 1px solid #cbd5e1; padding: 12px 8px; text-align: center; font-size: 14px; width: 25%;">하는 일</th>
+            <th style="border: 1px solid #cbd5e1; padding: 12px 8px; text-align: center; font-size: 14px; width: 10%;">인원</th>
+            <th style="border: 1px solid #cbd5e1; padding: 12px 8px; text-align: center; font-size: 14px; width: 35%;">담당 학생</th>
+            <th style="border: 1px solid #cbd5e1; padding: 12px 8px; text-align: center; font-size: 14px; width: 15%;">월급</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    currentJobs.forEach((job, idx) => {
+      const bgColor = idx % 2 === 0 ? '#ffffff' : '#fcfdfe';
+      tableHtml += `
+        <tr style="background-color: ${bgColor};">
+          <td style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: center; font-weight: bold; color: #007bff; font-size: 13px;">${job.name}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 10px 8px; font-size: 11px; color: #475569;">${job.desc}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: center; font-size: 12px;">${job.limit}명</td>
+          <td style="border: 1px solid #cbd5e1; padding: 10px 8px; font-size: 11px; color: #1e293b;">${job.students.join(', ') || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: right; font-weight: bold; color: #d69e2e; font-size: 13px;">${Number(job.salary).toLocaleString()}</td>
+        </tr>
+      `;
     });
 
-    doc.save(`job_results_${selectedYear}_${selectedMonth}.pdf`);
-    showMsg("PDF 저장 완료");
+    tableHtml += `
+        </tbody>
+      </table>
+      <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding-top: 15px;">
+        <div style="font-size: 12px; color: #94a3b8;">* 본 결과는 시스템에 의해 자동 생성되었습니다.</div>
+        <div style="text-align: right; font-size: 12px; color: #64748b; font-weight: bold;">출력 일시: ${new Date().toLocaleString('ko-KR')}</div>
+      </div>
+    `;
+
+    element.innerHTML = tableHtml;
+    
+    const opt = {
+      margin: 10,
+      filename: `학급직업배정결과_${selectedYear}_${selectedMonth}.pdf`,
+      image: { type: 'jpeg' as const, quality: 1 },
+      html2canvas: { 
+        scale: 2, 
+        useCORS: true,
+        letterRendering: true,
+        logging: false
+      },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    };
+
+    html2pdf().from(element).set(opt).save().then(() => {
+      showMsg("PDF 저장 완료");
+    }).catch((err: any) => {
+      console.error("PDF Error:", err);
+      showMsg("PDF 생성 실패", "#ff5252");
+    });
   };
 
   const renderStudentTag = (fullName: string) => {
