@@ -122,23 +122,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Fetch jobs and applications for the selected date
-    const historyRef = ref(db, `job_history/${selectedYear}_${selectedMonth}`);
-    onValue(historyRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const jobs = data.jobs || [];
-      setApplications(data.applications || {});
-      
-      if (jobs.length === 0) {
+    // Listen to active jobs in real-time or fall back to template jobs
+    const activeJobsRef = ref(db, 'class_job_data/active_jobs');
+    const unsubscribeJobs = onValue(activeJobsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const dbJobs = snapshot.val() || [];
+        setCurrentJobs(dbJobs.map((j: any) => ({ ...j, students: j.students || [] })));
+      } else {
+        // If there are no current active jobs, fetch from master templates
         get(ref(db, 'class_job_data/jobs')).then((s) => {
           const template = s.val() || [];
           setCurrentJobs(template.map((j: any) => ({ ...j, students: j.students || [] })));
         });
-      } else {
-        setCurrentJobs(jobs.map((j: any) => ({ ...j, students: j.students || [] })));
       }
     });
-  }, [selectedYear, selectedMonth]);
+
+    // Listen to applications in real-time
+    const appsRef = ref(db, 'class_job_data/applications');
+    const unsubscribeApps = onValue(appsRef, (snapshot) => {
+      setApplications(snapshot.val() || {});
+    });
+
+    return () => {
+      unsubscribeJobs();
+      unsubscribeApps();
+    };
+  }, []);
 
   // Priority Drag & Drop Initialization
   useEffect(() => {
@@ -369,8 +378,8 @@ export default function App() {
   };
 
   const saveToFirebase = () => {
-    const historyRef = ref(db, `job_history/${selectedYear}_${selectedMonth}/jobs`);
-    set(historyRef, currentJobs).then(() => showMsg("저장 성공!"));
+    const activeJobsRef = ref(db, 'class_job_data/active_jobs');
+    set(activeJobsRef, currentJobs).then(() => showMsg("저장 성공!"));
   };
 
   const submitApplication = () => {
@@ -382,7 +391,7 @@ export default function App() {
     const validPrefs = applyForm.prefs.filter(p => p !== '');
     if (validPrefs.length === 0) return showMsg("직업을 선택하세요.", "orange");
     
-    const appRef = ref(db, `job_history/${selectedYear}_${selectedMonth}/applications/${applyForm.studentId}`);
+    const appRef = ref(db, `class_job_data/applications/${applyForm.studentId}`);
     set(appRef, validPrefs).then(() => {
       showMsg("지원 완료!");
       setApplyForm({ ...applyForm, authCode: '', prefs: ['', '', '', '', ''] });
@@ -631,7 +640,7 @@ export default function App() {
             <div className="mb-8 flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-[#2c3e50]">직업 확인 명부</h1>
-                <p className="mt-1 text-sm font-semibold text-[#a0aec0]">{selectedYear}년 {selectedMonth}월 집계 결과</p>
+                <p className="mt-1 text-sm font-semibold text-[#a0aec0]">실시간 배정 및 급여 집계 결과</p>
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -662,21 +671,7 @@ export default function App() {
               <div>
                 <h1 className="text-2xl font-bold text-[#2c3e50]">학급 직업 관리</h1>
                 <div className="mt-2 flex items-center gap-2">
-                  <select 
-                    className="rounded-lg border border-[#ddd] bg-white px-2 py-1 text-xs font-bold outline-none"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  >
-                    {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>{y}년</option>)}
-                  </select>
-                  <select 
-                    className="rounded-lg border border-[#ddd] bg-white px-2 py-1 text-xs font-bold outline-none"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
-                  </select>
-                  <div className="ml-4 flex items-center gap-2 rounded-full bg-[#e3f2fd] px-4 py-1.5 text-sm font-bold text-[#007bff]">
+                  <div className="flex items-center gap-2 rounded-full bg-[#e3f2fd] px-4 py-1.5 text-sm font-bold text-[#007bff]">
                     <Briefcase size={14} />
                     총 필요 인원: {totalCapacity}명 / 학생 수: {studentsData.length}명
                     {totalCapacity !== studentsData.length && (
@@ -957,18 +952,25 @@ export default function App() {
                       setConfirmModal({
                         show: true,
                         title: "전체 초기화",
-                        msg: "이번 달의 모든 지원 및 배정 데이터를 삭제하시겠습니까?",
+                        msg: "지원 및 배정 데이터를 삭제하겠습니까? (직업 목록은 초기화되고 기본값으로 설정됩니다)",
                         onConfirm: () => {
-                          set(ref(db, `job_history/${selectedYear}_${selectedMonth}`), {}).then(() => {
-                            showMsg("데이터 초기화 완료", "#ff5252");
-                            setConfirmModal(null);
+                          get(ref(db, 'class_job_data/jobs')).then((s) => {
+                            const template = s.val() || [];
+                            const resetJobs = template.map((j: any) => ({ ...j, students: [] }));
+                            Promise.all([
+                              set(ref(db, 'class_job_data/active_jobs'), resetJobs),
+                              set(ref(db, 'class_job_data/applications'), {})
+                            ]).then(() => {
+                              showMsg("데이터 초기화 완료", "#ff5252");
+                              setConfirmModal(null);
+                            });
                           });
                         }
                       });
                     }}
                     className="w-full rounded-xl border border-red-200 bg-white py-3 text-xs font-bold text-red-500 hover:bg-red-50 transition-all"
                   >
-                    현재 월 데이터 전체 삭제
+                    지원 및 배정 전체 삭제
                   </button>
                 </div>
               </div>
@@ -1128,7 +1130,7 @@ export default function App() {
                       title: "지원내역 초기화",
                       msg: "모든 학생의 지원 내역을 삭제하시겠습니까?",
                       onConfirm: () => {
-                        set(ref(db, `job_history/${selectedYear}_${selectedMonth}/applications`), {}).then(() => {
+                        set(ref(db, 'class_job_data/applications'), {}).then(() => {
                           showMsg("초기화 완료", "#ff5252");
                           setConfirmModal(null);
                         });
